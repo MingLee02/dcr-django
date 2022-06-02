@@ -6,12 +6,21 @@ class Country(models.Model):
     alpha2Code = models.CharField(max_length=2)
     alpha3Code = models.CharField(max_length=3)
     population = models.IntegerField()
+    capital = models.CharField(max_length=100, blank=True)
+    top_level_domain = models.ManyToManyField("Domain")
 
     region = models.ForeignKey(
         "Region",
         on_delete=models.CASCADE,
         related_name="countries",
     )
+
+    def __str__(self):
+        return self.name
+
+
+class Domain(models.Model):
+    name = models.CharField(max_length=100)
 
     def __str__(self):
         return self.name
