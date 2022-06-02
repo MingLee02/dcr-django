@@ -1,44 +1,49 @@
 import json
 import os
+import requests
 
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from countries.models import Country, Region
+from .utils import create_region, create_country, create_domain
 
 
 class Command(BaseCommand):
-    help = "Loads country data from a JSON file."
+    help = "Loads country data from a url"
 
-    IMPORT_FILE = os.path.join(settings.BASE_DIR, "..", "data", "countries.json")
+    def __init__(
+        self, url=None, *args, **kwargs
+    ):
+        super(Command, self).__init__(*args, **kwargs)
+        if not url:
+            url = "https://storage.googleapis.com/dcr-django-test/countries.json"
+        self._url = url
 
     def get_data(self):
-        with open(self.IMPORT_FILE) as f:
-            data = json.load(f)
-        return data
+        request = requests.get(self._url)
+        if request.status_code == 200:
+            records = json.loads(request._content)
+            for record in records:
+                yield record
+        return None
 
     def handle(self, *args, **options):
         data = self.get_data()
-        for row in data:
-            region, region_created = Region.objects.get_or_create(name=row["region"])
-            if region_created:
-                self.stdout.write(
-                    self.style.SUCCESS("Region: {} - Created".format(region))
-                )
-            country, country_created = Country.objects.get_or_create(
-                name=row["name"],
-                defaults={
-                    "alpha2Code": row["alpha2Code"],
-                    "alpha3Code": row["alpha3Code"],
-                    "population": row["population"],
-                    "region": region,
-                },
-            )
+        if data:
+            for row in data:
+                region = create_region(self, row)
 
-            self.stdout.write(
-                self.style.SUCCESS(
-                    "{} - {}".format(
-                        country, "Created" if country_created else "Updated"
+                country = create_country(self, row, region)
+
+                if row.get('topLevelDomain', ' '):
+                    country.top_level_domain.clear()
+                    create_domain(
+                        self,
+                        country,
+                        row.get('topLevelDomain', ' ')
                     )
+        else:
+            self.stdout.write(
+                self.style.Error(
+                    "No data obtained from the url."
                 )
             )
